@@ -27,6 +27,8 @@ const newGame = ref({
   country: '',
   release: new Date().getFullYear(),
 });
+// ID du jeu en cours d'édition
+const editingId = ref<string | null>(null);
 
 // Initialisation de la base de données
 const initDatabase = () => {
@@ -61,10 +63,7 @@ const addGame = async (title: string, editor: string, country?: string, release?
     return;
   }
 
-  // Crée un nouvel ID pour le document
   const newDocId = `game_${Date.now()}`;
-
-  // Structure du nouveau document
   const newGameDoc: Game = {
     _id: newDocId,
     biblio: {
@@ -80,26 +79,82 @@ const addGame = async (title: string, editor: string, country?: string, release?
   };
 
   try {
-    // Sauvegarde le document dans PouchDB
     const response = await storage.value.put(newGameDoc);
     console.log('Document ajouté avec succès :', response);
-
-    // Rafraîchit la liste des jeux
     await fetchData();
   } catch (error) {
     console.error('Erreur lors de l\'ajout du jeu :', error);
   }
 };
 
-// Soumettre le formulaire
+// Fonction pour mettre à jour un jeu
+const updateGame = async (id: string, title: string, editor: string, country?: string, release?: number) => {
+  if (!storage.value) {
+    console.warn('Base de données non initialisée');
+    return;
+  }
+
+  try {
+    // Récupère le document actuel pour obtenir le _rev
+    const doc = await storage.value.get(id);
+    // Met à jour les données du jeu
+    doc.biblio.games[0] = {
+      title,
+      editor,
+      country,
+      release: release || new Date().getFullYear(),
+    };
+
+    // Sauvegarde les modifications
+    const response = await storage.value.put(doc);
+    console.log('Document mis à jour avec succès :', response);
+
+    // Réinitialise l'état d'édition
+    editingId.value = null;
+    newGame.value = {
+      title: '',
+      editor: '',
+      country: '',
+      release: new Date().getFullYear(),
+    };
+
+    // Rafraîchit la liste des jeux
+    await fetchData();
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour du jeu :', error);
+  }
+};
+
+// Soumettre le formulaire (ajout ou mise à jour)
 const submitNewGame = () => {
-  addGame(newGame.value.title, newGame.value.editor, newGame.value.country, newGame.value.release);
-  // Réinitialise le formulaire
+  if (editingId.value) {
+    // Si on est en mode édition, on met à jour le jeu
+    updateGame(
+      editingId.value,
+      newGame.value.title,
+      newGame.value.editor,
+      newGame.value.country,
+      newGame.value.release
+    );
+  } else {
+    // Sinon, on ajoute un nouveau jeu
+    addGame(
+      newGame.value.title,
+      newGame.value.editor,
+      newGame.value.country,
+      newGame.value.release
+    );
+  }
+};
+
+// Remplir le formulaire avec les données du jeu à modifier
+const editGame = (game: Game) => {
+  editingId.value = game._id;
   newGame.value = {
-    title: '',
-    editor: '',
-    country: '',
-    release: new Date().getFullYear(),
+    title: game.biblio.games[0].title,
+    editor: game.biblio.games[0].editor,
+    country: game.biblio.games[0].country || '',
+    release: game.biblio.games[0].release,
   };
 };
 
@@ -113,9 +168,9 @@ onMounted(() => {
 <template>
   <h1>Games List</h1>
 
-  <!-- Formulaire pour ajouter un jeu -->
+  <!-- Formulaire pour ajouter/mettre à jour un jeu -->
   <form @submit.prevent="submitNewGame" class="game-form">
-    <h2>Ajouter un jeu</h2>
+    <h2>{{ editingId ? 'Modifier un jeu' : 'Ajouter un jeu' }}</h2>
     <div>
       <label for="title">Titre :</label>
       <input id="title" v-model="newGame.title" placeholder="Titre du jeu" required />
@@ -132,21 +187,24 @@ onMounted(() => {
       <label for="release">Année de sortie :</label>
       <input id="release" v-model.number="newGame.release" type="number" placeholder="Année" required />
     </div>
-    <button type="submit">Ajouter le jeu</button>
+    <button type="submit">{{ editingId ? 'Mettre à jour' : 'Ajouter le jeu' }}</button>
+    <button v-if="editingId" type="button" @click="editingId = null; newGame = { title: '', editor: '', country: '', release: new Date().getFullYear() }">
+      Annuler
+    </button>
   </form>
 
   <!-- Liste des jeux -->
   <div v-if="gamesData.length > 0">
     <h2>Liste des jeux</h2>
-    <div v-for="game in gamesData" :key="game._id">
-      <div v-for="(g, index) in game.biblio.games" :key="index" class="game-card">
+    <div v-for="game in gamesData" :key="game._id" class="game-card">
+      <div v-for="(g, index) in game.biblio.games" :key="index">
         <h3>{{ g.title }}</h3>
         <p><strong>Éditeur :</strong> {{ g.editor }}</p>
         <p v-if="g.country"><strong>Pays :</strong> {{ g.country }}</p>
         <p><strong>Année de sortie :</strong> {{ g.release }}</p>
+        <button @click="editGame(game)">Modifier</button>
       </div>
     </div>
   </div>
   <p v-else>Aucun jeu trouvé.</p>
 </template>
-
