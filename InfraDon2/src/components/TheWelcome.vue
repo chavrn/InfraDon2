@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import PouchDB from 'pouchdb';
-
 // Interface pour un jeu
 interface Game {
   _id: string;
@@ -15,7 +14,6 @@ interface Game {
     }>;
   };
 }
-
 // Référence à la base de données
 const storage = ref<PouchDB.Database>();
 // Données stockées (liste de jeux)
@@ -29,7 +27,6 @@ const newGame = ref({
 });
 // ID du jeu en cours d'édition
 const editingId = ref<string | null>(null);
-
 // Initialisation de la base de données
 const initDatabase = () => {
   console.log('=> Connexion à la base de données');
@@ -41,7 +38,6 @@ const initDatabase = () => {
     console.warn('Échec lors de la connexion à la base de données');
   }
 };
-
 // Récupération des données
 const fetchData = async () => {
   if (!storage.value) return;
@@ -55,14 +51,12 @@ const fetchData = async () => {
     console.error('Erreur lors de la récupération des données :', error);
   }
 };
-
 // Fonction pour ajouter un jeu
 const addGame = async (title: string, editor: string, country?: string, release?: number) => {
   if (!storage.value) {
     console.warn('Base de données non initialisée');
     return;
   }
-
   const newDocId = `game_${Date.now()}`;
   const newGameDoc: Game = {
     _id: newDocId,
@@ -77,7 +71,6 @@ const addGame = async (title: string, editor: string, country?: string, release?
       ],
     },
   };
-
   try {
     const response = await storage.value.put(newGameDoc);
     console.log('Document ajouté avec succès :', response);
@@ -86,30 +79,22 @@ const addGame = async (title: string, editor: string, country?: string, release?
     console.error('Erreur lors de l\'ajout du jeu :', error);
   }
 };
-
 // Fonction pour mettre à jour un jeu
 const updateGame = async (id: string, title: string, editor: string, country?: string, release?: number) => {
   if (!storage.value) {
     console.warn('Base de données non initialisée');
     return;
   }
-
   try {
-    // Récupère le document actuel pour obtenir le _rev
     const doc = await storage.value.get(id);
-    // Met à jour les données du jeu
     doc.biblio.games[0] = {
       title,
       editor,
       country,
       release: release || new Date().getFullYear(),
     };
-
-    // Sauvegarde les modifications
     const response = await storage.value.put(doc);
     console.log('Document mis à jour avec succès :', response);
-
-    // Réinitialise l'état d'édition
     editingId.value = null;
     newGame.value = {
       title: '',
@@ -117,18 +102,29 @@ const updateGame = async (id: string, title: string, editor: string, country?: s
       country: '',
       release: new Date().getFullYear(),
     };
-
-    // Rafraîchit la liste des jeux
     await fetchData();
   } catch (error) {
     console.error('Erreur lors de la mise à jour du jeu :', error);
   }
 };
-
+// Fonction pour supprimer un jeu
+const deleteGame = async (id: string) => {
+  if (!storage.value) {
+    console.warn('Base de données non initialisée');
+    return;
+  }
+  try {
+    const doc = await storage.value.get(id);
+    const response = await storage.value.remove(doc);
+    console.log('Document supprimé avec succès :', response);
+    await fetchData();
+  } catch (error) {
+    console.error('Erreur lors de la suppression du jeu :', error);
+  }
+};
 // Soumettre le formulaire (ajout ou mise à jour)
 const submitNewGame = () => {
   if (editingId.value) {
-    // Si on est en mode édition, on met à jour le jeu
     updateGame(
       editingId.value,
       newGame.value.title,
@@ -137,7 +133,6 @@ const submitNewGame = () => {
       newGame.value.release
     );
   } else {
-    // Sinon, on ajoute un nouveau jeu
     addGame(
       newGame.value.title,
       newGame.value.editor,
@@ -146,7 +141,6 @@ const submitNewGame = () => {
     );
   }
 };
-
 // Remplir le formulaire avec les données du jeu à modifier
 const editGame = (game: Game) => {
   editingId.value = game._id;
@@ -164,10 +158,8 @@ onMounted(() => {
   fetchData();
 });
 </script>
-
 <template>
   <h1>Games List</h1>
-
   <!-- Formulaire pour ajouter/mettre à jour un jeu -->
   <form @submit.prevent="submitNewGame" class="game-form">
     <h2>{{ editingId ? 'Modifier un jeu' : 'Ajouter un jeu' }}</h2>
@@ -188,11 +180,11 @@ onMounted(() => {
       <input id="release" v-model.number="newGame.release" type="number" placeholder="Année" required />
     </div>
     <button type="submit">{{ editingId ? 'Mettre à jour' : 'Ajouter le jeu' }}</button>
-    <button v-if="editingId" type="button" @click="editingId = null; newGame = { title: '', editor: '', country: '', release: new Date().getFullYear() }">
+    <button v-if="editingId" type="button"
+      @click="editingId = null; newGame = { title: '', editor: '', country: '', release: new Date().getFullYear() }">
       Annuler
     </button>
   </form>
-
   <!-- Liste des jeux -->
   <div v-if="gamesData.length > 0">
     <h2>Liste des jeux</h2>
@@ -203,6 +195,7 @@ onMounted(() => {
         <p v-if="g.country"><strong>Pays :</strong> {{ g.country }}</p>
         <p><strong>Année de sortie :</strong> {{ g.release }}</p>
         <button @click="editGame(game)">Modifier</button>
+        <button @click="deleteGame(game._id)">Supprimer</button>
       </div>
     </div>
   </div>
