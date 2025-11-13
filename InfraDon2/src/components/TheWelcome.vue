@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import PouchDB from 'pouchdb';
+
+
 // Interface pour un jeu
 interface Game {
   _id: string;
@@ -29,15 +31,43 @@ const newGame = ref({
 const editingId = ref<string | null>(null);
 // Initialisation de la base de données
 const initDatabase = () => {
-  console.log('=> Connexion à la base de données');
-  const db = new PouchDB('http://admin:admin@localhost:5984/infradon2');
-  if (db) {
-    console.log("Connecté à la collection : " + db.name);
-    storage.value = db;
-  } else {
-    console.warn('Échec lors de la connexion à la base de données');
-  }
+  console.log('=> Initialisation de la base de données locale et distante');
+
+  // Base locale (PouchDB)
+  const localDB = new PouchDB('infradon-local');
+  storage.value = localDB;
+  console.log('Connecté à la base locale :', localDB.name);
+
+  // Base distante (CouchDB)
+  const remoteDB = new PouchDB('http://admin:admin@localhost:5984/infradon2');
+
+  //Réplication (distante → locale)
+  localDB.replicate
+    .from(remoteDB)
+    .on('complete', () => {
+      console.log('✓ Réplication initiale terminée');
+      fetchData();
+    })
+    .on('error', (err) => {
+      console.error('✗ Erreur lors de la réplication initiale :', err);
+    });
+
+  // Réplication (push)
+  localDB.replicate
+    .to(remoteDB, { live: true, retry: true })
+    .on('change', (info) => console.log('↑ Changement envoyé vers distant :', info))
+    .on('error', (err) => console.error('✗ Erreur de réplication TO :', err));
+
+  //Réplication (pull)
+  localDB.replicate
+    .from(remoteDB, { live: true, retry: true })
+    .on('change', (info) => {
+      console.log('↓ Changement reçu depuis distant :', info);
+      fetchData();
+    })
+    .on('error', (err) => console.error('✗ Erreur de réplication FROM :', err));
 };
+
 // Récupération des données
 const fetchData = async () => {
   if (!storage.value) return;
@@ -155,8 +185,8 @@ const editGame = (game: Game) => {
 onMounted(() => {
   console.log('=> Composant initialisé');
   initDatabase();
-  fetchData();
 });
+
 </script>
 <template>
   <h1>Games List</h1>
