@@ -1,6 +1,9 @@
 <script setup lang="ts" >
 import { onMounted, ref } from 'vue';
 import PouchDB from 'pouchdb';
+import PouchFind from 'pouchdb-find';
+
+PouchDB.plugin(PouchFind);
 
 // Interface
 interface Game {
@@ -30,6 +33,26 @@ const newGame = ref({
 
 const editingId = ref<string | null>(null);
 
+// Recherche
+const searchTitle = ref('');
+
+const searchGames = async () => {
+  if (!storage.value) return;
+
+  if (!searchTitle.value.trim()) {
+    fetchData();
+    return;
+  }
+
+  const result = await storage.value.find({
+    selector: {
+      'biblio.games.0.title': { $regex: new RegExp(searchTitle.value, 'i') }
+    }
+  });
+
+  gamesData.value = result.docs as Game[];
+};
+
 // Initialisation DB + réplication officielle
 const initDatabase = () => {
   const localDB = new PouchDB('infradon-local');
@@ -37,18 +60,21 @@ const initDatabase = () => {
 
   const remoteDB = new PouchDB('http://admin:admin@localhost:5984/infradon2');
 
-  // Réplication initiale
   localDB
     .replicate.from(remoteDB)
     .on('complete', () => fetchData());
 
-  // Sync live
   localDB
     .replicate.to(remoteDB, { live: true, retry: true });
 
   localDB
     .replicate.from(remoteDB, { live: true, retry: true })
     .on('change', () => fetchData());
+
+  // Index
+  localDB.createIndex({
+    index: { fields: ['biblio.games.0.title'] }
+  });
 };
 
 // Récupérer tous les documents
@@ -66,7 +92,7 @@ const addGame = async (title: string, editor: string, country?: string, release?
   if (!storage.value) return;
 
   const doc: Game = {
-    _id: game_${Date.now()},
+    _id: `game_${Date.now()}`,
     biblio: {
       games: [
         { title, editor, country, release: release || new Date().getFullYear() }
@@ -133,7 +159,7 @@ const submitNewGame = () => {
   }
 };
 
-// Remplissage formulaire en modification
+// Remplissage formulaire
 const editGame = (game: Game) => {
   editingId.value = game._id;
   newGame.value = {
@@ -151,6 +177,14 @@ onMounted(() => {
 
 <template>
   <h1>Games List</h1>
+
+  <!-- Barre de recherche -->
+  <input
+    v-model="searchTitle"
+    @input="searchGames"
+    placeholder="Rechercher un jeu par titre..."
+    style="margin-bottom: 15px; padding: 5px"
+  />
 
   <form @submit.prevent="submitNewGame" class="game-form">
     <h2>{{ editingId ? 'Modifier un jeu' : 'Ajouter un jeu' }}</h2>
