@@ -1,9 +1,8 @@
-<script setup lang="ts">
+<script setup lang="ts" >
 import { onMounted, ref } from 'vue';
 import PouchDB from 'pouchdb';
 
-
-// Interface pour un jeu
+// Interface
 interface Game {
   _id: string;
   _rev?: string;
@@ -16,143 +15,105 @@ interface Game {
     }>;
   };
 }
-// Référence à la base de données
+
+// Références
 const storage = ref<PouchDB.Database>();
-// Données stockées (liste de jeux)
 const gamesData = ref<Game[]>([]);
-// Données du formulaire
+
+// Formulaire
 const newGame = ref({
   title: '',
   editor: '',
   country: '',
   release: new Date().getFullYear(),
 });
-// ID du jeu en cours d'édition
-const editingId = ref<string | null>(null);
-// Initialisation de la base de données
-const initDatabase = () => {
-  console.log('=> Initialisation de la base de données locale et distante');
 
-  // Base locale (PouchDB)
+const editingId = ref<string | null>(null);
+
+// Initialisation DB + réplication officielle
+const initDatabase = () => {
   const localDB = new PouchDB('infradon-local');
   storage.value = localDB;
-  console.log('Connecté à la base locale :', localDB.name);
 
-  // Base distante (CouchDB)
   const remoteDB = new PouchDB('http://admin:admin@localhost:5984/infradon2');
 
-  //Réplication (distante → locale)
-  localDB.replicate
-    .from(remoteDB)
-    .on('complete', () => {
-      console.log('✓ Réplication initiale terminée');
-      fetchData();
-    })
-    .on('error', (err) => {
-      console.error('✗ Erreur lors de la réplication initiale :', err);
-    });
+  // Réplication initiale
+  localDB
+    .replicate.from(remoteDB)
+    .on('complete', () => fetchData());
 
-  // Réplication (push)
-  localDB.replicate
-    .to(remoteDB, { live: true, retry: true })
-    .on('change', (info) => console.log('↑ Changement envoyé vers distant :', info))
-    .on('error', (err) => console.error('✗ Erreur de réplication TO :', err));
+  // Sync live
+  localDB
+    .replicate.to(remoteDB, { live: true, retry: true });
 
-  //Réplication (pull)
-  localDB.replicate
-    .from(remoteDB, { live: true, retry: true })
-    .on('change', (info) => {
-      console.log('↓ Changement reçu depuis distant :', info);
-      fetchData();
-    })
-    .on('error', (err) => console.error('✗ Erreur de réplication FROM :', err));
+  localDB
+    .replicate.from(remoteDB, { live: true, retry: true })
+    .on('change', () => fetchData());
 };
 
-// Récupération des données
+// Récupérer tous les documents
 const fetchData = async () => {
   if (!storage.value) return;
-  try {
-    const result = await storage.value.allDocs({ include_docs: true });
-    gamesData.value = result.rows
-      .map(row => row.doc as Game)
-      .filter(doc => doc.biblio && doc.biblio.games);
-    console.log('Données récupérées :', gamesData.value);
-  } catch (error) {
-    console.error('Erreur lors de la récupération des données :', error);
-  }
+
+  const result = await storage.value.allDocs({ include_docs: true });
+  gamesData.value = result.rows
+    .map(r => r.doc as Game)
+    .filter(doc => doc?.biblio?.games);
 };
-// Fonction pour ajouter un jeu
+
+// Ajouter un jeu
 const addGame = async (title: string, editor: string, country?: string, release?: number) => {
-  if (!storage.value) {
-    console.warn('Base de données non initialisée');
-    return;
-  }
-  const newDocId = `game_${Date.now()}`;
-  const newGameDoc: Game = {
-    _id: newDocId,
+  if (!storage.value) return;
+
+  const doc: Game = {
+    _id: game_${Date.now()},
     biblio: {
       games: [
-        {
-          title,
-          editor,
-          country,
-          release: release || new Date().getFullYear(),
-        },
-      ],
-    },
+        { title, editor, country, release: release || new Date().getFullYear() }
+      ]
+    }
   };
-  try {
-    const response = await storage.value.put(newGameDoc);
-    console.log('Document ajouté avec succès :', response);
-    await fetchData();
-  } catch (error) {
-    console.error('Erreur lors de l\'ajout du jeu :', error);
-  }
+
+  await storage.value.put(doc);
+  await fetchData();
 };
-// Fonction pour mettre à jour un jeu
+
+// Modifier un jeu
 const updateGame = async (id: string, title: string, editor: string, country?: string, release?: number) => {
-  if (!storage.value) {
-    console.warn('Base de données non initialisée');
-    return;
-  }
-  try {
-    const doc = await storage.value.get(id);
-    doc.biblio.games[0] = {
-      title,
-      editor,
-      country,
-      release: release || new Date().getFullYear(),
-    };
-    const response = await storage.value.put(doc);
-    console.log('Document mis à jour avec succès :', response);
-    editingId.value = null;
-    newGame.value = {
-      title: '',
-      editor: '',
-      country: '',
-      release: new Date().getFullYear(),
-    };
-    await fetchData();
-  } catch (error) {
-    console.error('Erreur lors de la mise à jour du jeu :', error);
-  }
+  if (!storage.value) return;
+
+  const doc = await storage.value.get<Game>(id);
+
+  doc.biblio.games[0] = {
+    title,
+    editor,
+    country,
+    release: release || new Date().getFullYear(),
+  };
+
+  await storage.value.put(doc);
+  editingId.value = null;
+
+  newGame.value = {
+    title: '',
+    editor: '',
+    country: '',
+    release: new Date().getFullYear(),
+  };
+
+  await fetchData();
 };
-// Fonction pour supprimer un jeu
+
+// Supprimer un jeu
 const deleteGame = async (id: string) => {
-  if (!storage.value) {
-    console.warn('Base de données non initialisée');
-    return;
-  }
-  try {
-    const doc = await storage.value.get(id);
-    const response = await storage.value.remove(doc);
-    console.log('Document supprimé avec succès :', response);
-    await fetchData();
-  } catch (error) {
-    console.error('Erreur lors de la suppression du jeu :', error);
-  }
+  if (!storage.value) return;
+
+  const doc = await storage.value.get(id);
+  await storage.value.remove(doc);
+  await fetchData();
 };
-// Soumettre le formulaire (ajout ou mise à jour)
+
+// Soumission formulaire
 const submitNewGame = () => {
   if (editingId.value) {
     updateGame(
@@ -171,7 +132,8 @@ const submitNewGame = () => {
     );
   }
 };
-// Remplir le formulaire avec les données du jeu à modifier
+
+// Remplissage formulaire en modification
 const editGame = (game: Game) => {
   editingId.value = game._id;
   newGame.value = {
@@ -183,51 +145,64 @@ const editGame = (game: Game) => {
 };
 
 onMounted(() => {
-  console.log('=> Composant initialisé');
   initDatabase();
 });
-
 </script>
+
 <template>
   <h1>Games List</h1>
-  <!-- Formulaire pour ajouter/mettre à jour un jeu -->
+
   <form @submit.prevent="submitNewGame" class="game-form">
     <h2>{{ editingId ? 'Modifier un jeu' : 'Ajouter un jeu' }}</h2>
+
     <div>
       <label for="title">Titre :</label>
-      <input id="title" v-model="newGame.title" placeholder="Titre du jeu" required />
+      <input id="title" v-model="newGame.title" required />
     </div>
+
     <div>
       <label for="editor">Éditeur :</label>
-      <input id="editor" v-model="newGame.editor" placeholder="Éditeur" required />
+      <input id="editor" v-model="newGame.editor" required />
     </div>
+
     <div>
-      <label for="country">Pays (optionnel) :</label>
-      <input id="country" v-model="newGame.country" placeholder="Pays" />
+      <label for="country">Pays :</label>
+      <input id="country" v-model="newGame.country" />
     </div>
+
     <div>
       <label for="release">Année de sortie :</label>
-      <input id="release" v-model.number="newGame.release" type="number" placeholder="Année" required />
+      <input id="release" v-model.number="newGame.release" type="number" required />
     </div>
-    <button type="submit">{{ editingId ? 'Mettre à jour' : 'Ajouter le jeu' }}</button>
-    <button v-if="editingId" type="button"
-      @click="editingId = null; newGame = { title: '', editor: '', country: '', release: new Date().getFullYear() }">
+
+    <button type="submit">
+      {{ editingId ? 'Mettre à jour' : 'Ajouter le jeu' }}
+    </button>
+
+    <button
+      v-if="editingId"
+      type="button"
+      @click="editingId = null; newGame = { title: '', editor: '', country: '', release: new Date().getFullYear() }"
+    >
       Annuler
     </button>
   </form>
-  <!-- Liste des jeux -->
+
   <div v-if="gamesData.length > 0">
     <h2>Liste des jeux</h2>
+
     <div v-for="game in gamesData" :key="game._id" class="game-card">
       <div v-for="(g, index) in game.biblio.games" :key="index">
         <h3>{{ g.title }}</h3>
         <p><strong>Éditeur :</strong> {{ g.editor }}</p>
         <p v-if="g.country"><strong>Pays :</strong> {{ g.country }}</p>
-        <p><strong>Année de sortie :</strong> {{ g.release }}</p>
+        <p><strong>Année :</strong> {{ g.release }}</p>
+
         <button @click="editGame(game)">Modifier</button>
         <button @click="deleteGame(game._id)">Supprimer</button>
       </div>
     </div>
   </div>
+
   <p v-else>Aucun jeu trouvé.</p>
 </template>
