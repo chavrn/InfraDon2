@@ -114,6 +114,7 @@ h1 {
   margin-top: 5px;
 }
 
+/* --- CARTE DE JEU --- */
 .game-card {
   display: flex;
   align-items: center;
@@ -136,7 +137,6 @@ h1 {
   text-transform: uppercase;
 }
 
-/* --- P INFOS --- */
 .game-card p {
   font-size: 1.085rem;
   color: var(--muted);
@@ -144,42 +144,49 @@ h1 {
   line-height: 1.36;
 }
 
-/* --- BOUTONS --- */
 .game-card button,
 .game-form button,
-button {
+button,
+.sync-btn {
   display: inline-block;
   min-width: 140px;
-  max-width: 240px;
+  max-width: 260px;
   padding: 11px 0;
-  margin: 12px 18px 0 0;
   background: var(--fg);
   color: #fff;
-  font-size: 1.07rem;
+  font-size: 1.13rem;
   font-weight: 700;
   letter-spacing: 0.09em;
   border: 2px solid var(--fg);
-  border-radius: 5px;
+  border-radius: 7px;
   text-transform: uppercase;
   cursor: pointer;
   box-shadow: 0 1px 20px rgba(20,20,20,0.06);
-  transition: background 0.21s, color 0.18s, border 0.18s;
+  transition: background 0.21s, color 0.18s, border 0.18s, opacity 0.15s;
+  margin: 12px 18px 0 0;
+  opacity: 1;
 }
 
 .game-card button:last-child,
 .game-form button:last-child {
   margin-right: 0;
 }
-
 .game-card button:hover,
 .game-form button:hover,
-button:hover {
+button:hover,
+.sync-btn:hover:not(:disabled) {
   background: var(--accent);
-  color: #fff;
   border-color: var(--accent);
 }
+.sync-btn:disabled {
+  background: #ececec;
+  color: #aaa;
+  border-color: #ddd;
+  cursor: not-allowed;
+  opacity: 0.74;
+}
 
-/* --- BARRE DE RECHERCHE --- */
+/* --- Barre de recherche large --- */
 input[type="text"], input[type="number"] {
   border: 1.33px solid #222;
   background: #f4f4f4;
@@ -231,7 +238,73 @@ input:focus {
   letter-spacing: 1.13px;
 }
 
-/* --- FOOTER ARCHIVE STYLE --- */
+/* --- Sync + Offline row --- */
+.sync-offline-row {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  margin-bottom: 28px;
+  margin-top: 12px;
+}
+
+/* --- Toggle custom typographique --- */
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 1.16rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--fg);
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+/* Masquer l'input natif */
+.toggle-label input[type="checkbox"] {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+/* Carré custom, à côté du texte */
+.toggle-custom {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  background: #fff;
+  border: 2px solid var(--border);
+  border-radius: 7px;
+  transition: border-color 0.18s, background 0.18s;
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* Effet coché accent */
+.toggle-label input[type="checkbox"]:checked + .toggle-custom {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle-label input[type="checkbox"]:checked + .toggle-custom::after {
+  content: "";
+  display: block;
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: 9px;
+  height: 9px;
+  background: #fff;
+  border-radius: 2px;
+}
+
+.toggle-label input[type="checkbox"]:focus + .toggle-custom {
+  outline: 2px solid var(--accent);
+}
+
+/* --- FOOTER ARCHIVE --- */
 .archive-footer {
   width: 100%;
   display: flex;
@@ -246,7 +319,7 @@ input:focus {
   gap: 28px;
 }
 
-/* --- RESPONSIVE FULL LARGEUR --- */
+/* --- Responsive --- */
 @media (max-width: 1100px) {
   main {
       padding: 28px 8vw;

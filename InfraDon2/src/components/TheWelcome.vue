@@ -1,4 +1,4 @@
-<script setup lang="ts" >
+<script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import PouchDB from 'pouchdb';
 import PouchFind from 'pouchdb-find';
@@ -22,6 +22,9 @@ interface Game {
 // Références
 const storage = ref<PouchDB.Database>();
 const gamesData = ref<Game[]>([]);
+
+// Mode offline
+const isOffline = ref(false);
 
 // Formulaire
 const newGame = ref({
@@ -60,16 +63,13 @@ const initDatabase = () => {
 
   const remoteDB = new PouchDB('http://admin:admin@localhost:5984/infradon2');
 
+  // Réplication initiale (toujours)
   localDB
     .replicate.from(remoteDB)
     .on('complete', () => fetchData());
 
-  localDB
-    .replicate.to(remoteDB, { live: true, retry: true });
-
-  localDB
-    .replicate.from(remoteDB, { live: true, retry: true })
-    .on('change', () => fetchData());
+  // LIVE sync désactivée volontairement (mode manuel)
+  // activée uniquement via un bouton
 
   // Index
   localDB.createIndex({
@@ -84,7 +84,8 @@ const fetchData = async () => {
   const result = await storage.value.allDocs({ include_docs: true });
   gamesData.value = result.rows
     .map(r => r.doc as Game)
-    .filter(doc => doc?.biblio?.games);
+    .filter(doc => doc?.biblio?.games)
+    .filter((doc) => !doc._id.startsWith("_"));
 };
 
 // Ajouter un jeu
@@ -170,6 +171,19 @@ const editGame = (game: Game) => {
   };
 };
 
+// synchronisation manuelle
+const watchDistantChanges = async () => {
+  if (!storage.value || isOffline.value) return;
+
+  const localDB = storage.value;
+  const remoteDB = new PouchDB('http://admin:admin@localhost:5984/infradon2');
+
+  await localDB.replicate.to(remoteDB);
+  await localDB.replicate.from(remoteDB);
+
+  await fetchData();
+};
+
 onMounted(() => {
   initDatabase();
 });
@@ -178,13 +192,24 @@ onMounted(() => {
 <template>
   <h1>Games List</h1>
 
+  <!-- Mode offline -->
+  <!-- Section Sync + Offline alignés -->
+  <div class="sync-offline-row">
+    <label class="toggle-label">
+      <input type="checkbox" v-model="isOffline" />
+      <span class="toggle-custom"></span>
+      Mode Offline
+    </label>
+
+    <button class="sync-btn" @click="watchDistantChanges" :disabled="isOffline">
+      Synchronisation
+    </button>
+  </div>
+
+
   <!-- Barre de recherche -->
-  <input
-    v-model="searchTitle"
-    @input="searchGames"
-    placeholder="Rechercher un jeu par titre..."
-    style="margin-bottom: 15px; padding: 5px"
-  />
+  <input v-model="searchTitle" @input="searchGames" placeholder="Rechercher un jeu par titre..."
+    style="margin-bottom: 15px; padding: 5px" />
 
   <form @submit.prevent="submitNewGame" class="game-form">
     <h2>{{ editingId ? 'Modifier un jeu' : 'Ajouter un jeu' }}</h2>
@@ -213,11 +238,8 @@ onMounted(() => {
       {{ editingId ? 'Mettre à jour' : 'Ajouter le jeu' }}
     </button>
 
-    <button
-      v-if="editingId"
-      type="button"
-      @click="editingId = null; newGame = { title: '', editor: '', country: '', release: new Date().getFullYear() }"
-    >
+    <button v-if="editingId" type="button"
+      @click="editingId = null; newGame = { title: '', editor: '', country: '', release: new Date().getFullYear() }">
       Annuler
     </button>
   </form>
