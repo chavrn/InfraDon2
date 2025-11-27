@@ -70,22 +70,21 @@ const initDatabase = () => {
 
   // LIVE sync désactivée volontairement (mode manuel)
   // activée uniquement via un bouton
-
-  // Index
-  localDB.createIndex({
-    index: { fields: ['biblio.games.0.title'] }
-  });
 };
 
-// Récupérer tous les documents
+// Récupérer tous les documents (via index CouchDB)
 const fetchData = async () => {
   if (!storage.value) return;
 
-  const result = await storage.value.allDocs({ include_docs: true });
-  gamesData.value = result.rows
-    .map(r => r.doc as Game)
-    .filter(doc => doc?.biblio?.games)
-    .filter((doc) => !doc._id.startsWith("_"));
+  const result = await storage.value.find({
+    selector: {
+      _id: { $gt: null }
+    }
+  });
+
+  gamesData.value = result.docs
+    .filter((doc: any) => doc?.biblio?.games)
+    .filter((doc: any) => !doc._id.startsWith("_"));
 };
 
 // Ajouter un jeu
@@ -193,7 +192,6 @@ onMounted(() => {
   <h1>Games List</h1>
 
   <!-- Mode offline -->
-  <!-- Section Sync + Offline alignés -->
   <div class="sync-offline-row">
     <label class="toggle-label">
       <input type="checkbox" v-model="isOffline" />
@@ -205,7 +203,6 @@ onMounted(() => {
       Synchronisation
     </button>
   </div>
-
 
   <!-- Barre de recherche -->
   <input v-model="searchTitle" @input="searchGames" placeholder="Rechercher un jeu par titre..."
