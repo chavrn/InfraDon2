@@ -207,8 +207,11 @@ const addComment = async (gameId: string) => {
 
 const fetchCommentsForGame = async (gameId: string) => {
   if (!commentsDB.value) return;
-  const res = await commentsDB.value.find({ selector: { type: 'comment', gameId } });
-  commentsByGame.value[gameId] = (res.docs as CommentDoc[]).sort((a, b) => b.createdAt - a.createdAt);
+  const res = await commentsDB.value.find({
+    selector: { type: 'comment', gameId },
+    sort: [{ createdAt: 'desc' }]
+  });
+  commentsByGame.value[gameId] = res.docs as CommentDoc[];
   if (showAllComments.value[gameId] === undefined) showAllComments.value[gameId] = false;
 };
 
