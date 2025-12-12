@@ -38,7 +38,8 @@ interface LikeDoc {
 }
 
 // Références
-const storage = ref<PouchDB.Database>();
+const gamesDB = ref<PouchDB.Database>();
+const commentsDB = ref<PouchDB.Database>();
 const gamesData = ref<Game[]>([]);
 
 // Mode offline
@@ -64,19 +65,16 @@ const newCommentText = ref<Record<string, string>>({});
 const likesCount = ref<Record<string, number>>({});
 const likesDocsByGame = ref<Record<string, LikeDoc[]>>({});
 
-// helper
-const getRemoteDB = () => new PouchDB('http://admin:admin@localhost:5984/infradon2');
-
 // search games by title
 const searchGames = async () => {
-  if (!storage.value) return;
+  if (!gamesDB.value) return;
 
   if (!searchTitle.value.trim()) {
     fetchData();
     return;
   }
 
-  const result = await storage.value.find({
+  const result = await gamesDB.value.find({
     selector: {
       'biblio.games.0.title': { $regex: new RegExp(searchTitle.value, 'i') }
     }
@@ -91,22 +89,28 @@ const searchGames = async () => {
 
 // Initialisation DB + réplication officielle
 const initDatabase = () => {
-  const localDB = new PouchDB('infradon-local');
-  storage.value = localDB;
+  const localGamesDB = new PouchDB('infradon-games-local');
+  gamesDB.value = localGamesDB;
 
-  const remoteDB = new PouchDB('http://admin:admin@localhost:5984/infradon2');
+  const localCommentsDB = new PouchDB('infradon-comments-local');
+  commentsDB.value = localCommentsDB;
+
+  const remoteGamesDB = new PouchDB('http://admin:admin@localhost:5984/infradon2');
+  const remoteCommentsDB = new PouchDB('http://admin:admin@localhost:5984/infradon-comments');
 
   // Réplication initiale
-  localDB
-    .replicate.from(remoteDB)
+  localGamesDB
+    .replicate.from(remoteGamesDB)
     .on('complete', () => fetchData());
+
+  localCommentsDB.replicate.from(remoteCommentsDB);
 };
 
 // Récupérer tous les documents
 const fetchData = async () => {
-  if (!storage.value) return;
+  if (!gamesDB.value) return;
 
-  const result = await storage.value.find({
+  const result = await gamesDB.value.find({
     selector: { _id: { $gt: null } }
   });
 
@@ -122,7 +126,7 @@ const fetchData = async () => {
 
 // Ajouter un jeu
 const addGame = async (title: string, editor: string, country?: string, release?: number) => {
-  if (!storage.value) return;
+  if (!gamesDB.value) return;
 
   const doc: Game = {
     _id: `game_${Date.now()}`,
@@ -133,19 +137,19 @@ const addGame = async (title: string, editor: string, country?: string, release?
     }
   };
 
-  await storage.value.put(doc);
+  await gamesDB.value.put(doc);
   await fetchData();
 };
 
 // Modifier un jeu
 const updateGame = async (id: string, title: string, editor: string, country?: string, release?: number) => {
-  if (!storage.value) return;
+  if (!gamesDB.value) return;
 
-  const doc = await storage.value.get<Game>(id);
+  const doc = await gamesDB.value.get<Game>(id);
 
   doc.biblio.games[0] = { title, editor, country, release: release || new Date().getFullYear() };
 
-  await storage.value.put(doc);
+  await gamesDB.value.put(doc);
   editingId.value = null;
 
   newGame.value = { title: '', editor: '', country: '', release: new Date().getFullYear() };
@@ -155,18 +159,17 @@ const updateGame = async (id: string, title: string, editor: string, country?: s
 
 // Supprimer un jeu
 const deleteGame = async (id: string) => {
-  if (!storage.value) return;
+  if (!gamesDB.value || !commentsDB.value) return;
 
-  const doc = await storage.value.get(id);
-  await storage.value.remove(doc);
+  const doc = await gamesDB.value.get(id);
+  await gamesDB.value.remove(doc);
 
-  if (storage.value) {
-    const cRes = await storage.value.find({ selector: { type: 'comment', gameId: id } });
-    for (const c of cRes.docs) await storage.value.remove(c);
+  const cRes = await commentsDB.value.find({ selector: { type: 'comment', gameId: id } });
+  for (const c of cRes.docs) await commentsDB.value.remove(c);
 
-    const lRes = await storage.value.find({ selector: { type: 'like', gameId: id } });
-    for (const l of lRes.docs) await storage.value.remove(l);
-  }
+  const lRes = await commentsDB.value.find({ selector: { type: 'like', gameId: id } });
+  for (const l of lRes.docs) await commentsDB.value.remove(l);
+
   await fetchData();
 };
 
@@ -192,63 +195,66 @@ const editGame = (game: Game) => {
 
 // Comments functions
 const addComment = async (gameId: string) => {
-  if (!storage.value) return;
+  if (!commentsDB.value) return;
   const text = (newCommentText.value[gameId] || '').trim();
   if (!text) return;
 
   const doc: CommentDoc = { _id: `comment_${Date.now()}`, type: 'comment', gameId, text, createdAt: Date.now() };
-  await storage.value.put(doc);
+  await commentsDB.value.put(doc);
   newCommentText.value[gameId] = '';
   await fetchCommentsForGame(gameId);
 };
 
 const fetchCommentsForGame = async (gameId: string) => {
-  if (!storage.value) return;
-  const res = await storage.value.find({ selector: { type: 'comment', gameId } });
+  if (!commentsDB.value) return;
+  const res = await commentsDB.value.find({ selector: { type: 'comment', gameId } });
   commentsByGame.value[gameId] = (res.docs as CommentDoc[]).sort((a, b) => b.createdAt - a.createdAt);
   if (showAllComments.value[gameId] === undefined) showAllComments.value[gameId] = false;
 };
 
 const deleteComment = async (commentId: string, gameId?: string) => {
-  if (!storage.value) return;
-  const doc = await storage.value.get(commentId);
-  await storage.value.remove(doc);
+  if (!commentsDB.value) return;
+  const doc = await commentsDB.value.get(commentId);
+  await commentsDB.value.remove(doc);
   if (gameId) await fetchCommentsForGame(gameId);
 };
 
 // Likes functions
 const fetchLikesForGame = async (gameId: string) => {
-  if (!storage.value) return;
-  const res = await storage.value.find({ selector: { type: 'like', gameId } });
+  if (!commentsDB.value) return;
+  const res = await commentsDB.value.find({ selector: { type: 'like', gameId } });
   likesDocsByGame.value[gameId] = res.docs as LikeDoc[];
   likesCount.value[gameId] = likesDocsByGame.value[gameId]?.length || 0;
 };
 
 const toggleLike = async (gameId: string) => {
-  if (!storage.value) return;
+  if (!commentsDB.value) return;
 
   const likes = likesDocsByGame.value[gameId] || [];
   if (likes.length > 0) {
     // unlike the most recent
-    const doc = await storage.value.get(likes[likes.length - 1]._id);
-    await storage.value.remove(doc);
+    const doc = await commentsDB.value.get(likes[likes.length - 1]._id);
+    await commentsDB.value.remove(doc);
   } else {
     // add a new like
     const doc: LikeDoc = { _id: `like_${Date.now()}`, type: 'like', gameId, createdAt: Date.now() };
-    await storage.value.put(doc);
+    await commentsDB.value.put(doc);
   }
   await fetchLikesForGame(gameId);
 };
 
 // synchronisation manuelle
 const watchDistantChanges = async () => {
-  if (!storage.value || isOffline.value) return;
+  if (!gamesDB.value || !commentsDB.value || isOffline.value) return;
 
-  const localDB = storage.value;
-  const remoteDB = getRemoteDB();
+  const remoteGamesDB = new PouchDB('http://admin:admin@localhost:5984/infradon2');
+  const remoteCommentsDB = new PouchDB('http://admin:admin@localhost:5984/infradon-comments');
 
-  await localDB.replicate.to(remoteDB);
-  await localDB.replicate.from(remoteDB);
+  await gamesDB.value.replicate.to(remoteGamesDB);
+  await gamesDB.value.replicate.from(remoteGamesDB);
+
+  await commentsDB.value.replicate.to(remoteCommentsDB);
+  await commentsDB.value.replicate.from(remoteCommentsDB);
 
   await fetchData();
 };
