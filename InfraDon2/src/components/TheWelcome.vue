@@ -138,6 +138,7 @@ const addGame = async (title: string, editor: string, country?: string, release?
   };
 
   await gamesDB.value.put(doc);
+  newGame.value = { title: '', editor: '', country: '', release: new Date().getFullYear() };
   await fetchData();
 };
 
