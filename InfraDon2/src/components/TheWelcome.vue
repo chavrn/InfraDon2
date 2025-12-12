@@ -200,9 +200,13 @@ const addComment = async (gameId: string) => {
   if (!text) return;
 
   const doc: CommentDoc = { _id: `comment_${Date.now()}`, type: 'comment', gameId, text, createdAt: Date.now() };
-  await commentsDB.value.put(doc);
+  const result = await commentsDB.value.put(doc);
+
+  const newComment: CommentDoc = { ...doc, _rev: result.rev };
+  if (!commentsByGame.value[gameId]) commentsByGame.value[gameId] = [];
+  commentsByGame.value[gameId].unshift(newComment);
+
   newCommentText.value[gameId] = '';
-  await fetchCommentsForGame(gameId);
 };
 
 const fetchCommentsForGame = async (gameId: string) => {
@@ -233,17 +237,11 @@ const fetchLikesForGame = async (gameId: string) => {
 const toggleLike = async (gameId: string) => {
   if (!commentsDB.value) return;
 
-  const likes = likesDocsByGame.value[gameId] || [];
-  if (likes.length > 0) {
-    // unlike the most recent
-    const doc = await commentsDB.value.get(likes[likes.length - 1]._id);
-    await commentsDB.value.remove(doc);
-  } else {
-    // add a new like
-    const doc: LikeDoc = { _id: `like_${Date.now()}`, type: 'like', gameId, createdAt: Date.now() };
-    await commentsDB.value.put(doc);
-  }
-  await fetchLikesForGame(gameId);
+  const doc: LikeDoc = { _id: `like_${Date.now()}`, type: 'like', gameId, createdAt: Date.now() };
+  await commentsDB.value.put(doc);
+
+  if (!likesCount.value[gameId]) likesCount.value[gameId] = 0;
+  likesCount.value[gameId]++;
 };
 
 // synchronisation manuelle
