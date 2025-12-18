@@ -4,7 +4,7 @@
   --container-bg: #fff;
   --fg: #161616;
   --muted: #757575;
-  --accent: #FFBF65;
+  --accent: #f525c1;
   --border: #232323;
   --max-width: 1800px;
 }
@@ -354,4 +354,48 @@ input:focus {
   .games-list {
       gap: 11px;
   }
+
+  /* Ajoute ceci à la fin de ton CSS */
+
+.game-card .delete-image-btn {
+  /* 1. Reset des styles globaux qui cassent tout */
+  min-width: 0 !important; /* Force l'annulation du 140px */
+  margin: 0 !important;
+  padding: 0 !important;
+  
+  /* 2. Taille et Position */
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  z-index: 10;
+  
+  /* 3. Style visuel */
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 1;
+  
+  /* 4. Flex pour centrer le X */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  /* 5. Transition */
+  transition: all 0.2s ease;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.game-card .delete-image-btn:hover {
+  background: #ff4444;
+  border-color: #ff4444;
+  transform: scale(1.1);
+}
+
+  
 }
