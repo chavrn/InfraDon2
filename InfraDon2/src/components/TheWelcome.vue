@@ -64,15 +64,19 @@ const editingId = ref<string | null>(null);
 // Recherche
 const searchTitle = ref('');
 
-// Tri ⭐ NOUVEAU
-const sortBy = ref<'default' | 'likes'>('default');
+// Tri
+const sortBy = ref<'default' | 'likes'>('likes');
 
-// comments & likes state
-const commentsByGame = ref<Record<string, CommentDoc[]>>({});
+// Pagination
+const gamesPerPage = 10;
+const hasMoreGames = ref(true);
+
+// comments state
+const lastCommentByGame = ref<Record<string, CommentDoc | null>>({});
+const allCommentsByGame = ref<Record<string, CommentDoc[]>>({});
 const showAllComments = ref<Record<string, boolean>>({});
 const newCommentText = ref<Record<string, string>>({});
 const likesCount = ref<Record<string, number>>({});
-const likesDocsByGame = ref<Record<string, LikeDoc[]>>({});
 
 // Images
 const selectedImage = ref<File | null>(null);
@@ -140,25 +144,24 @@ const searchGames = async () => {
 
   gamesData.value = result.docs as Game[];
   for (const g of gamesData.value) {
-    fetchCommentsForGame(g._id);
+    fetchLastCommentForGame(g._id);
     fetchLikesForGame(g._id);
     loadGameImage(g._id);
   }
 };
 
-// Fonction pour trier les jeux ⭐ NOUVEAU
+// Fonction pour trier les jeux
 const getSortedGames = () => {
   if (sortBy.value === 'likes') {
     return [...gamesData.value].sort((a, b) => {
       const likesA = likesCount.value[a._id] || 0;
       const likesB = likesCount.value[b._id] || 0;
-      return likesB - likesA; // Du plus au moins
+      return likesB - likesA;
     });
   }
   return gamesData.value;
 };
 
-// Toggle du tri ⭐ NOUVEAU
 const toggleSort = () => {
   sortBy.value = sortBy.value === 'default' ? 'likes' : 'default';
 };
@@ -191,23 +194,40 @@ const initDatabase = async () => {
   localCommentsDB.replicate.from(remoteCommentsDB);
 };
 
-// Récupérer tous les documents
-const fetchData = async () => {
+// Récupérer avec pagination (10 à la fois)
+const fetchData = async (append: boolean = false) => {
   if (!gamesDB.value) return;
 
+  const skip = append ? gamesData.value.length : 0;
+
   const result = await gamesDB.value.find({
-    selector: { _id: { $gt: null } }
+    selector: { _id: { $gt: null } },
+    limit: gamesPerPage,
+    skip: skip
   });
 
-  gamesData.value = result.docs
+  const newGames = result.docs
     .filter((doc: any) => doc?.biblio?.games)
     .filter((doc: any) => !doc._id.startsWith("_"));
 
-  for (const g of gamesData.value) {
-    await fetchCommentsForGame(g._id);
+  if (append) {
+    gamesData.value = [...gamesData.value, ...newGames];
+  } else {
+    gamesData.value = newGames;
+  }
+
+  hasMoreGames.value = newGames.length === gamesPerPage;
+
+  for (const g of newGames) {
+    await fetchLastCommentForGame(g._id);
     await fetchLikesForGame(g._id);
     await loadGameImage(g._id);
   }
+};
+
+// Charger 10 jeux suivants
+const loadMoreGames = async () => {
+  await fetchData(true);
 };
 
 // Ajouter un jeu
@@ -334,7 +354,38 @@ const editGame = async (game: Game) => {
   }
 };
 
-// Comments functions
+// Récupérer seulement le DERNIER commentaire
+const fetchLastCommentForGame = async (gameId: string) => {
+  if (!commentsDB.value) return;
+  const res = await commentsDB.value.find({
+    selector: { type: 'comment', gameId },
+    sort: [{ type: 'asc' }, { gameId: 'asc' }, { createdAt: 'desc' }],
+    limit: 1
+  });
+  lastCommentByGame.value[gameId] = res.docs.length > 0 ? (res.docs[0] as CommentDoc) : null;
+  if (showAllComments.value[gameId] === undefined) showAllComments.value[gameId] = false;
+};
+
+// Récupérer tous les commentaires quand on clique sur "Voir tous"
+const fetchAllCommentsForGame = async (gameId: string) => {
+  if (!commentsDB.value) return;
+  const res = await commentsDB.value.find({
+    selector: { type: 'comment', gameId },
+    sort: [{ type: 'asc' }, { gameId: 'asc' }, { createdAt: 'desc' }]
+  });
+  allCommentsByGame.value[gameId] = res.docs as CommentDoc[];
+};
+
+// Toggle pour afficher/masquer tous les commentaires
+const toggleShowAllComments = async (gameId: string) => {
+  if (!showAllComments.value[gameId]) {
+    await fetchAllCommentsForGame(gameId);
+    showAllComments.value[gameId] = true;
+  } else {
+    showAllComments.value[gameId] = false;
+  }
+};
+
 const addComment = async (gameId: string) => {
   if (!commentsDB.value) return;
   const text = (newCommentText.value[gameId] || '').trim();
@@ -344,35 +395,33 @@ const addComment = async (gameId: string) => {
   const result = await commentsDB.value.put(doc);
 
   const newComment: CommentDoc = { ...doc, _rev: result.rev };
-  if (!commentsByGame.value[gameId]) commentsByGame.value[gameId] = [];
-  commentsByGame.value[gameId].unshift(newComment);
+  lastCommentByGame.value[gameId] = newComment;
+
+  if (showAllComments.value[gameId]) {
+    if (!allCommentsByGame.value[gameId]) allCommentsByGame.value[gameId] = [];
+    allCommentsByGame.value[gameId].unshift(newComment);
+  }
 
   newCommentText.value[gameId] = '';
-};
-
-const fetchCommentsForGame = async (gameId: string) => {
-  if (!commentsDB.value) return;
-  const res = await commentsDB.value.find({
-    selector: { type: 'comment', gameId },
-    sort: [{ type: 'asc' }, { gameId: 'asc' }, { createdAt: 'desc' }]
-  });
-  commentsByGame.value[gameId] = res.docs as CommentDoc[];
-  if (showAllComments.value[gameId] === undefined) showAllComments.value[gameId] = false;
 };
 
 const deleteComment = async (commentId: string, gameId?: string) => {
   if (!commentsDB.value) return;
   const doc = await commentsDB.value.get(commentId);
   await commentsDB.value.remove(doc);
-  if (gameId) await fetchCommentsForGame(gameId);
+  if (gameId) {
+    await fetchLastCommentForGame(gameId);
+    if (showAllComments.value[gameId]) {
+      await fetchAllCommentsForGame(gameId);
+    }
+  }
 };
 
 // Likes functions
 const fetchLikesForGame = async (gameId: string) => {
   if (!commentsDB.value) return;
   const res = await commentsDB.value.find({ selector: { type: 'like', gameId } });
-  likesDocsByGame.value[gameId] = res.docs as LikeDoc[];
-  likesCount.value[gameId] = likesDocsByGame.value[gameId]?.length || 0;
+  likesCount.value[gameId] = res.docs.length || 0;
 };
 
 const toggleLike = async (gameId: string) => {
@@ -464,20 +513,19 @@ onMounted(() => {
     </button>
   </form>
 
-  <!-- Bouton tri ⭐ NOUVEAU -->
+  <!-- Bouton tri -->
   <div v-if="gamesData.length > 0" style="margin-bottom: 20px; display: flex; gap: 12px; align-items: center;">
     <button @click="toggleSort" :style="{
       background: sortBy === 'likes' ? 'var(--accent)' : 'var(--fg)',
       borderColor: sortBy === 'likes' ? 'var(--accent)' : 'var(--fg)'
     }">
-      {{ sortBy === 'likes' ? '❤️ Trier par likes (actif)' : 'Trier par likes' }}
+      {{ sortBy === 'likes' ? 'Trier par likes' : 'Trier par likes' }}
     </button>
   </div>
 
   <div v-if="gamesData.length > 0">
     <h2>Liste des jeux</h2>
 
-    <!-- ⭐ CHANGÉ: getSortedGames() au lieu de gamesData -->
     <div v-for="game in getSortedGames()" :key="game._id" class="game-card">
       <div v-for="(g, index) in game.biblio.games" :key="index"
         style="display: flex; align-items: center; width: 100%;">
@@ -508,27 +556,55 @@ onMounted(() => {
             <span>{{ likesCount[game._id] || 0 }}</span>
           </div>
 
-          <!-- Commentaire -->
+          <!-- Affichage commentaires optimisé -->
           <div style="margin-top:8px;">
-            <input v-model="newCommentText[game._id]" placeholder="Ajouter un commentaire..."
-              style="width:80%; padding:6px; margin-right:6px;" />
-            <button @click="() => addComment(game._id)">Ajouter</button>
+            <!-- Dernier commentaire seulement -->
+            <div v-if="lastCommentByGame[game._id] && !showAllComments[game._id]"
+              style="padding:8px; background:#f0f0f0; border-radius:4px; margin-bottom:8px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span><strong>Dernier:</strong> {{ lastCommentByGame[game._id].text }}</span>
+                <button @click="() => deleteComment(lastCommentByGame[game._id]!._id, game._id)"
+                  style="background:none; border:none; color:red; cursor:pointer; font-size:18px;">×</button>
+              </div>
+            </div>
+
+            <!-- Tous les commentaires (affiché à la demande) -->
+            <ul v-if="showAllComments[game._id] && allCommentsByGame[game._id]" style="margin-top:8px;">
+              <li v-for="c in allCommentsByGame[game._id]" :key="c._id"
+                style="margin-bottom:4px; display:flex; align-items:center; justify-content:space-between; padding:6px; background:#f0f0f0; border-radius:4px;">
+                <span>{{ c.text }}</span>
+                <button @click="() => deleteComment(c._id, game._id)"
+                  style="background:none; border:none; color:red; cursor:pointer;">×</button>
+              </li>
+            </ul>
+
+            <!-- Bouton voir tous / masquer -->
+            <button v-if="lastCommentByGame[game._id]" @click="() => toggleShowAllComments(game._id)"
+              style="padding:4px 10px; background:#2196F3; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px; margin-bottom:8px;">
+              {{ showAllComments[game._id] ? 'Masquer' : 'Voir tous les commentaires' }}
+            </button>
+
+            <!-- Ajouter commentaire -->
+            <div style="display:flex; gap:6px;">
+              <input v-model="newCommentText[game._id]" placeholder="Ajouter un commentaire..."
+                style="flex:1; padding:6px; margin-right:6px;" />
+              <button @click="() => addComment(game._id)">Ajouter</button>
+            </div>
           </div>
 
-          <ul v-if="commentsByGame[game._id] && commentsByGame[game._id].length" style="margin-top:8px;">
-            <li v-for="c in commentsByGame[game._id]" :key="c._id"
-              style="margin-bottom:4px; display:flex; align-items:center; justify-content:space-between;">
-              <span>{{ c.text }}</span>
-              <button @click="() => deleteComment(c._id, game._id)"
-                style="background:none; border:none; color:red; cursor:pointer;">×</button>
-            </li>
-          </ul>
           <div style="margin-top:10px;">
             <button @click="editGame(game)">Modifier</button>
             <button @click="deleteGame(game._id)">Supprimer</button>
           </div>
         </div>
       </div>
+    </div>
+
+    <!--- Bouton charger plus -->
+    <div v-if="hasMoreGames" style="text-align:center; margin:20px 0;">
+      <button @click="loadMoreGames" style="padding:12px 24px; font-size:16px;">
+        Charger les 10 jeux suivants
+      </button>
     </div>
   </div>
 

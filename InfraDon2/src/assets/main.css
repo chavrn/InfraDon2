@@ -33,7 +33,7 @@ main {
   max-width: var(--max-width);
   margin: 60px auto 40px auto;
   background: var(--container-bg);
-  box-shadow: 0 3px 24px rgba(30,30,30,0.05);
+  box-shadow: 0 3px 24px rgba(30, 30, 30, 0.05);
   border-radius: 12px;
   border: 1.5px solid #ececec;
   padding: 68px 60px 40px 60px;
@@ -161,7 +161,7 @@ button,
   border-radius: 7px;
   text-transform: uppercase;
   cursor: pointer;
-  box-shadow: 0 1px 20px rgba(20,20,20,0.06);
+  box-shadow: 0 1px 20px rgba(20, 20, 20, 0.06);
   transition: background 0.21s, color 0.18s, border 0.18s, opacity 0.15s;
   margin: 12px 18px 0 0;
   opacity: 1;
@@ -171,6 +171,7 @@ button,
 .game-form button:last-child {
   margin-right: 0;
 }
+
 .game-card button:hover,
 .game-form button:hover,
 button:hover,
@@ -178,6 +179,7 @@ button:hover,
   background: var(--accent);
   border-color: var(--accent);
 }
+
 .sync-btn:disabled {
   background: #ececec;
   color: #aaa;
@@ -187,7 +189,8 @@ button:hover,
 }
 
 /* --- Barre de recherche large --- */
-input[type="text"], input[type="number"] {
+input[type="text"],
+input[type="number"] {
   border: 1.33px solid #222;
   background: #f4f4f4;
   font-size: 1.19rem;
@@ -216,7 +219,7 @@ input:focus {
   display: flex;
   flex-direction: column;
   gap: 26px;
-  box-shadow: 0 3px 21px rgba(40,40,40,0.06);
+  box-shadow: 0 3px 21px rgba(40, 40, 40, 0.06);
 }
 
 .game-form h2 {
@@ -283,12 +286,12 @@ input:focus {
 }
 
 /* Effet coché accent */
-.toggle-label input[type="checkbox"]:checked + .toggle-custom {
+.toggle-label input[type="checkbox"]:checked+.toggle-custom {
   background: var(--accent);
   border-color: var(--accent);
 }
 
-.toggle-label input[type="checkbox"]:checked + .toggle-custom::after {
+.toggle-label input[type="checkbox"]:checked+.toggle-custom::after {
   content: "";
   display: block;
   position: absolute;
@@ -300,8 +303,41 @@ input:focus {
   border-radius: 2px;
 }
 
-.toggle-label input[type="checkbox"]:focus + .toggle-custom {
+.toggle-label input[type="checkbox"]:focus+.toggle-custom {
   outline: 2px solid var(--accent);
+}
+
+/* --- Bouton supprimer image --- */
+.delete-image-btn {
+  position: absolute !important;
+  top: 6px !important;
+  right: 6px !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: rgba(0, 0, 0, 0.75) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 6px !important;
+  font-size: 16px !important;
+  font-weight: bold !important;
+  line-height: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important;
+  transition: all 0.2s ease !important;
+  z-index: 10;
+}
+
+.delete-image-btn:hover {
+  background: #ff4444 !important;
+  border-color: #ff4444 !important;
+  transform: scale(1.1) !important;
 }
 
 /* --- FOOTER ARCHIVE --- */
@@ -322,80 +358,43 @@ input:focus {
 /* --- Responsive --- */
 @media (max-width: 1100px) {
   main {
-      padding: 28px 8vw;
+    padding: 28px 8vw;
   }
+
   .game-form {
-      padding: 16px 2vw;
-      max-width: 100%;
+    padding: 16px 2vw;
+    max-width: 100%;
   }
+
   .game-card h3 {
-      font-size: 1.4rem;
+    font-size: 1.4rem;
   }
 }
 
 @media (max-width: 650px) {
   main {
-      padding: 18px 2vw;
+    padding: 18px 2vw;
   }
-  .archive-topbar, .archive-footer {
-      flex-direction: column;
-      align-items: flex-start;
-      font-size: 0.85rem;
-      gap: 10px;
+
+  .archive-topbar,
+  .archive-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    font-size: 0.85rem;
+    gap: 10px;
   }
+
   h1 {
-      font-size: 2.2rem;
+    font-size: 2.2rem;
   }
+
   .info-row {
-      grid-template-columns: 1fr;
-      gap: 6px;
-      font-size: 0.97rem;
+    grid-template-columns: 1fr;
+    gap: 6px;
+    font-size: 0.97rem;
   }
+
   .games-list {
-      gap: 11px;
+    gap: 11px;
   }
-
-  /* Ajoute ceci à la fin de ton CSS */
-
-.game-card .delete-image-btn {
-  /* 1. Reset des styles globaux qui cassent tout */
-  min-width: 0 !important; /* Force l'annulation du 140px */
-  margin: 0 !important;
-  padding: 0 !important;
-  
-  /* 2. Taille et Position */
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 28px;
-  height: 28px;
-  z-index: 10;
-  
-  /* 3. Style visuel */
-  background: rgba(0, 0, 0, 0.75);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: bold;
-  line-height: 1;
-  
-  /* 4. Flex pour centrer le X */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  
-  /* 5. Transition */
-  transition: all 0.2s ease;
-  cursor: pointer;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-}
-
-.game-card .delete-image-btn:hover {
-  background: #ff4444;
-  border-color: #ff4444;
-  transform: scale(1.1);
-}
-
-  
 }
