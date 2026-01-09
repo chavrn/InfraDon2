@@ -5,6 +5,7 @@ import PouchFind from 'pouchdb-find';
 
 PouchDB.plugin(PouchFind);
 
+
 // Interface
 interface Game {
   _id: string;
@@ -229,6 +230,42 @@ const fetchData = async (append: boolean = false) => {
 const loadMoreGames = async () => {
   await fetchData(true);
 };
+
+// ==================== FACTORY - SEED DATABASE (10 jeux) ====================
+// Factory pour générer quelques jeux de démo et alimenter la base de données
+// Permet de tester l'indexation, la recherche et la pagination
+const seedDatabaseWithGames = async () => {
+  if (!gamesDB.value) return;
+
+  const sampleGames = [
+    { title: "Hades", editor: "Supergiant Games", country: "USA", release: 2020 },
+    { title: "Hollow Knight", editor: "Team Cherry", country: "Australia", release: 2017 },
+    { title: "Celeste", editor: "Maddy Makes Games", country: "Canada", release: 2018 },
+    { title: "Dead Cells", editor: "Motion Twin", country: "France", release: 2018 },
+    { title: "Stardew Valley", editor: "ConcernedApe", country: "USA", release: 2016 },
+    { title: "The Witcher 3: Wild Hunt", editor: "CD Projekt Red", country: "Poland", release: 2015 },
+    { title: "The Legend of Zelda: Breath of the Wild", editor: "Nintendo", country: "Japan", release: 2017 },
+    { title: "Dark Souls", editor: "FromSoftware", country: "Japan", release: 2011 },
+    { title: "Rayman Legends", editor: "Ubisoft", country: "France", release: 2013 },
+    { title: "Minecraft", editor: "Mojang", country: "Sweden", release: 2011 }
+  ];
+
+  const docs = sampleGames.map((game, index) => ({
+    _id: `game_demo_${Date.now()}_${index}`,
+    biblio: {
+      games: [game]
+    }
+  }));
+
+  try {
+    const result = await gamesDB.value.bulkDocs(docs);
+    console.log(`✅ ${result.length} jeux de démo ajoutés avec succès!`);
+    await fetchData(); // Recharger l'affichage
+  } catch (error) {
+    console.error('❌ Erreur lors de l\'insertion des données de démo:', error);
+  }
+};
+// ==================== FIN FACTORY ====================
 
 // Ajouter un jeu
 const addGame = async (title: string, editor: string, country?: string, release?: number) => {
@@ -457,6 +494,15 @@ onMounted(() => {
 </script>
 <template>
   <h1>Games List</h1>
+
+  <!-- Bouton Factory -->
+  <div style="margin-bottom: 20px;">
+    <button @click="seedDatabaseWithGames"
+      style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">
+      Remplir avec 10 jeux de démo
+    </button>
+  </div>
+
 
   <!-- Mode offline -->
   <div class="sync-offline-row">
